@@ -1,15 +1,19 @@
 # This file may be used to create an environment using:
 # $ conda create --name <env> --file <this file>
 # platform: osx-arm64
+alembic=1.13.2=pyhd8ed1ab_0
 aniso8601=9.0.1=pyhd8ed1ab_0
 blinker=1.8.2=pyhd8ed1ab_0
 bzip2=1.0.8=h99b78c6_7
 ca-certificates=2024.7.4=hf0a4a13_0
 click=8.1.7=unix_pyh707e725_0
 flask=3.0.3=pyhd8ed1ab_0
+flask-migrate=4.0.7=pyhd8ed1ab_0
 flask-restful=0.3.10=pyhd8ed1ab_0
+flask-sqlalchemy=3.1.1=pyhd8ed1ab_0
 greenlet=3.0.3=py311h92babd0_0
 importlib-metadata=8.2.0=pyha770c72_0
+importlib_resources=6.4.0=pyhd8ed1ab_0
 itsdangerous=2.2.0=pyhd8ed1ab_0
 jinja2=3.1.4=pyhd8ed1ab_0
 krb5=1.21.3=h237132a_0
@@ -20,6 +24,7 @@ libffi=3.4.2=h3422bc3_5
 libpq=16.4=h7afe498_0
 libsqlite=3.46.0=hfb93653_0
 libzlib=1.3.1=hfb2fe0b_1
+mako=1.3.5=pyhd8ed1ab_0
 markupsafe=2.1.5=py311h05b510d_0
 ncurses=6.5=hb89a1cb_0
 openssl=3.3.1=hfb2fe0b_2
