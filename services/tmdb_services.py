@@ -1,6 +1,6 @@
 import requests
 from flask import current_app
-from .models import db, Movie, Genre, Actor
+from app.models import db, Movie, Genre, Actor
 
 class TMDbService:
 
@@ -37,18 +37,31 @@ class TMDbService:
                     db.session.add(actor_obj)
                 actor_objects.append(actor_obj)
 
-        # Create and store movie object
-        movie = Movie(
-            tmdb_id=movie_data['id'],
-            title=movie_data['title'],
-            description=movie_data.get('overview', ''),
-            release_date=movie_data.get('release_date'),
-            rating=movie_data.get('vote_average', 0),
-            poster_url=movie_data.get('poster_path', ''),
-            genres=genre_objects,
-            actors=actor_objects
-        )
-        db.session.add(movie)
+        # Check if the movie already exists in the database by tmdb_id
+        existing_movie = Movie.query.filter_by(tmdb_id=movie_data['id']).first()
+        if existing_movie:
+            # Update the existing movie's details if necessary
+            existing_movie.title = movie_data['title']
+            existing_movie.description = movie_data.get('overview', '')
+            existing_movie.release_date = movie_data.get('release_date')
+            existing_movie.rating = movie_data.get('vote_average', 0)
+            existing_movie.poster_url = f"https://image.tmdb.org/t/p/w500{movie_data.get('poster_path', '')}"
+            existing_movie.genres = genre_objects
+            existing_movie.actors = actor_objects
+        else:
+            # Create a new movie object
+            movie = Movie(
+                tmdb_id=movie_data['id'],
+                title=movie_data['title'],
+                description=movie_data.get('overview', ''),
+                release_date=movie_data.get('release_date'),
+                rating=movie_data.get('vote_average', 0),
+                poster_url=f"https://image.tmdb.org/t/p/w500{movie_data.get('poster_path', '')}",
+                genres=genre_objects,
+                actors=actor_objects
+            )
+            db.session.add(movie)
+
         db.session.commit()
 
     @staticmethod
@@ -71,7 +84,29 @@ class TMDbService:
     @staticmethod
     def save_trending_movies_to_db(movies):
         for movie_data in movies:
-            # Check if movie already exists
             movie = Movie.query.filter_by(tmdb_id=movie_data['id']).first()
             if not movie:
                 TMDbService.save_movie_to_db(movie_data)
+
+    @staticmethod
+    def search_movies(query, include_adult=False, language='en-US', page=1, primary_release_year=None, region=None, year=None):
+        api_key = current_app.config.get('TMDB_API_KEY')
+        params = {
+            'api_key': api_key,
+            'query': query,
+            'include_adult': include_adult,
+            'language': language,
+            'page': page,
+        }
+        if primary_release_year:
+            params['primary_release_year'] = primary_release_year
+        if region:
+            params['region'] = region
+        if year:
+            params['year'] = year
+        
+        url = 'https://api.themoviedb.org/3/search/movie'
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            return response.json().get('results', [])
+        return None
