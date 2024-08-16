@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, session, url_for
 from flask_restful import Api, Resource, fields, marshal_with
-from .models import db, Movie, Genre, Actor, User
+from .models import db, Movie, Genre, Actor, User, Favorite, Rating, Watchlist
 from services.tmdb_services import TMDbService
 
 # Define a blueprint
@@ -15,12 +15,47 @@ user_fields = {
     'links': fields.Raw
 }
 
+movie_fields = {
+    'id': fields.Integer,
+    'tmdb_id': fields.Integer,
+    'title': fields.String,
+    'description': fields.String,
+    'release_date': fields.String(attribute=lambda x: x.release_date.isoformat() if x and x.release_date else None),  # Additional check for None
+    'rating': fields.Float,
+    'poster_url': fields.String,
+    'links': fields.Raw
+}
+
+favorite_fields = {
+    'id': fields.Integer,
+    'movie': fields.Nested(movie_fields),
+}
+
+rating_fields = {
+    'id': fields.Integer,
+    'rating': fields.Float,
+    'review': fields.String,
+    'created_at': fields.String(attribute=lambda x: x.created_at.isoformat()),
+    'movie': fields.Nested(movie_fields),
+}
+
+watchlist_fields = {
+    'id': fields.Integer,
+    'movie': fields.Nested(movie_fields),
+}
+
+# Additional helper methods for adding HATEOAS links
 def add_user_links(user):
     return {
         "logout": url_for('main.logoutresource', _external=True)
     }
 
-# Registration Resource
+def add_movie_links(movie):
+    return {
+        "self": url_for('main.movie_detail', movie_id=movie.id, _external=True),
+        "all_movies": url_for('main.movies', _external=True)
+    }
+
 class RegisterResource(Resource):
     @marshal_with(user_fields)
     def post(self):
@@ -43,8 +78,8 @@ class RegisterResource(Resource):
         new_user.links = add_user_links(new_user)
         return new_user, 201
 
-# Login Resource
 class LoginResource(Resource):
+    @marshal_with(user_fields)
     def post(self):
         data = request.get_json()
         username = data.get('username')
@@ -57,36 +92,17 @@ class LoginResource(Resource):
         if user and user.check_password(password):
             session['user_id'] = user.id
             session['username'] = user.username
-            return {'message': f'Welcome {username}'}, 200
+            user.links = add_user_links(user)
+            return user, 200
         else:
             return {'message': 'Invalid username or password'}, 401
 
-# Logout Resource
 class LogoutResource(Resource):
     def post(self):
         session.pop('user_id', None)
         session.pop('username', None)
         return {'message': 'You have been logged out'}, 200
 
-# Define field mappings for marshalling
-movie_fields = {
-    'id': fields.Integer,
-    'tmdb_id': fields.Integer,
-    'title': fields.String,
-    'description': fields.String,
-    'release_date': fields.String(attribute=lambda x: x.release_date.isoformat()),  # Convert date to ISO format string
-    'rating': fields.Float,
-    'poster_url': fields.String,
-    'links': fields.Raw
-}
-
-def add_movie_links(movie):
-    return {
-        "self": url_for('main.movie_detail', movie_id=movie.id, _external=True),
-        "all_movies": url_for('main.movies', _external=True)
-    }
-
-# Define API Resources
 class MovieResource(Resource):
     @marshal_with(movie_fields)
     def get(self, movie_id):
@@ -119,6 +135,10 @@ class MovieCreateResource(Resource):
     @marshal_with(movie_fields)
     def post(self):
         data = request.get_json()
+        existing_movie = Movie.query.filter_by(tmdb_id=data.get('tmdb_id')).first()
+        if existing_movie:
+            return {'message': 'Movie with this TMDB ID already exists'}, 409
+
         new_movie = Movie(
             tmdb_id=data.get('tmdb_id', None),
             title=data['title'],
@@ -173,16 +193,126 @@ class MovieSearchResource(Resource):
         
         include_adult = request.args.get('include_adult', 'false').lower() == 'true'
         language = request.args.get('language', 'en-US')
-        page = int(request.args.get('page', 1))
-        primary_release_year = request.args.get('primary_release_year', None)
-        region = request.args.get('region', None)
-        year = request.args.get('year', None)
+        page = int(request.get('page', 1))
+        primary_release_year = request.get('primary_release_year', None)
+        region = request.get('region', None)
+        year = request.get('year', None)
 
         results = TMDbService.search_movies(query, include_adult, language, page, primary_release_year, region, year)
         if results:
             return results, 200, {'Cache-Control': 'public, max-age=3600'}
         else:
             return {'message': 'No results found'}, 404
+
+class FavoriteResource(Resource):
+    @marshal_with(favorite_fields)
+    def post(self):
+        user_id = session.get('user_id')
+        data = request.get_json()
+        movie_id = data.get('movie_id')
+
+        favorite = Favorite.query.filter_by(user_id=user_id, movie_id=movie_id).first()
+        if favorite:
+            return {'message': 'This movie is already in your favorites'}, 409
+
+        new_favorite = Favorite(user_id=user_id, movie_id=movie_id)
+        db.session.add(new_favorite)
+        db.session.commit()
+
+        return new_favorite, 201
+
+    @marshal_with(favorite_fields)
+    def get(self):
+        user_id = session.get('user_id')
+        favorites = Favorite.query.filter_by(user_id=user_id).all()
+        return favorites
+    
+    def delete(self, movie_id):
+        user_id = session.get('user_id')
+        favorite = Favorite.query.filter_by(user_id=user_id, movie_id=movie_id).first()
+        if not favorite:
+            return {'message': 'This movie is not in your favorites'}, 404
+
+        db.session.delete(favorite)
+        db.session.commit()
+
+        return {'message': 'Movie removed from favorites'}, 200
+
+
+class RatingResource(Resource):
+    @marshal_with(rating_fields)
+    def post(self):
+        user_id = session.get('user_id')
+        data = request.get_json()
+        movie_id = data.get('movie_id')
+        rating_value = data.get('rating')
+        review = data.get('review', '')
+
+        rating = Rating.query.filter_by(user_id=user_id, movie_id=movie_id).first()
+        if rating:
+            rating.rating = rating_value
+            rating.review = review
+        else:
+            rating = Rating(user_id=user_id, movie_id=movie_id, rating=rating_value, review=review)
+            db.session.add(rating)
+
+        db.session.commit()
+
+        return rating, 201
+
+    @marshal_with(rating_fields)
+    def get(self):
+        user_id = session.get('user_id')
+        ratings = Rating.query.filter_by(user_id=user_id).all()
+        return ratings
+
+
+class MovieReviewsResource(Resource):
+    @marshal_with(rating_fields)
+    def get(self, movie_id):
+        reviews = Rating.query.filter_by(movie_id=movie_id).all()
+        return reviews, 200
+
+class WatchlistResource(Resource):
+    @marshal_with(watchlist_fields)
+    def post(self):
+        user_id = session.get('user_id')
+        if not user_id:
+            return {'message': 'User not logged in'}, 401
+        
+        data = request.get_json()
+        movie_id = data.get('movie_id')
+
+        watchlist_item = Watchlist.query.filter_by(user_id=user_id, movie_id=movie_id).first()
+        if watchlist_item:
+            return {'message': 'This movie is already in your watchlist'}, 409
+
+        new_watchlist_item = Watchlist(user_id=user_id, movie_id=movie_id)
+        db.session.add(new_watchlist_item)
+        db.session.commit()
+
+        return new_watchlist_item, 201
+
+    @marshal_with(watchlist_fields)
+    def get(self):
+        user_id = session.get('user_id')
+        if not user_id:
+            return {'message': 'User not logged in'}, 401
+        watchlist = Watchlist.query.filter_by(user_id=user_id).all()
+        return watchlist
+    
+    def delete(self, movie_id):
+        user_id = session.get('user_id')
+        watchlist_item = Watchlist.query.filter_by(user_id=user_id, movie_id=movie_id).first()
+        if not watchlist_item:
+            return {'message': 'This movie is not in your watchlist'}, 404
+
+        db.session.delete(watchlist_item)
+        db.session.commit()
+
+        return {'message': 'Movie removed from watchlist'}, 200
+
+
 
 # Add resources to API
 api.add_resource(MovieResource, '/movies/<int:movie_id>', endpoint='movie_detail')  # GET, PUT, DELETE for a movie
@@ -195,3 +325,9 @@ api.add_resource(MovieSearchResource, '/movies/search')
 api.add_resource(RegisterResource, '/users/register')
 api.add_resource(LoginResource, '/users/login')
 api.add_resource(LogoutResource, '/users/logout')
+api.add_resource(FavoriteResource, '/users/favorites', endpoint='favorites')  # POST, GET for favorites
+api.add_resource(FavoriteResource, '/users/favorites/<int:movie_id>', endpoint='favorite_delete')  # DELETE for a specific favorite
+api.add_resource(RatingResource, '/users/ratings', endpoint='ratings')
+api.add_resource(WatchlistResource, '/users/watchlist', endpoint='watchlist')  # POST, GET for watchlist
+api.add_resource(WatchlistResource, '/users/watchlist/<int:movie_id>', endpoint='watchlist_delete')  # DELETE for a specific watchlist item
+api.add_resource(MovieReviewsResource, '/movies/<int:movie_id>/reviews', endpoint='movie_reviews')
