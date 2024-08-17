@@ -41,6 +41,7 @@ class Movie(db.Model):
     release_date = db.Column(db.Date)
     rating = db.Column(db.Float)
     poster_url = db.Column(db.String)
+    original_language = db.Column(db.String(10))  # Language code
     genres = db.relationship('Genre', secondary='movie_genres', back_populates='movies')
     actors = db.relationship('Actor', secondary='movie_actors', back_populates='movies')
 

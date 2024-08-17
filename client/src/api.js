@@ -9,6 +9,7 @@ const api = axios.create({
   withCredentials: true, // Ensures cookies (like session cookies) are sent with each request
 });
 
+
 // Export the axios instance
 export default api;
 
@@ -38,3 +39,6 @@ export const addReview = (reviewData) => api.post('/users/ratings', reviewData);
 export const addToWatchlist = (movieId) => api.post('/users/watchlist', { movie_id: movieId });
 export const removeFromWatchlist = (movieId) => api.delete(`/users/watchlist/${movieId}`);
 export const fetchWatchlist = () => api.get('/users/watchlist');
+
+// Search
+export const fetchMoviesBySearchQuery = (query) => api.get(`/movies/search?query=${query}`);

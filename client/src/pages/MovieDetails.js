@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UserContext } from '../UserContext';
 import { FaStar, FaRegStar } from 'react-icons/fa';
-import { Card, Button, Form, Container, Row, Col } from 'react-bootstrap';
+import { Card, Button, Form, Container, Row, Col, ListGroup } from 'react-bootstrap';
 import {
   fetchMovieDetails,
   fetchReviews,
@@ -42,8 +42,6 @@ const MovieDetails = () => {
               (item) => item.movie.id === parseInt(id)
             );
             setIsInWatchlist(inWatchlist);
-          } else {
-            console.error('Watchlist response is not an array:', watchlistResponse.data);
           }
 
           const favoritesResponse = await fetchFavorites();
@@ -52,8 +50,6 @@ const MovieDetails = () => {
               (item) => item.movie.id === parseInt(id)
             );
             setIsFavorited(favorited);
-          } else {
-            console.error('Favorites response is not an array:', favoritesResponse.data);
           }
         }
       } catch (error) {
@@ -139,19 +135,48 @@ const MovieDetails = () => {
         <Col md={4}>
           <Card>
             <Card.Img variant="top" src={movie.poster_url} alt={movie.title} />
+            <Card.Body>
+              <Card.Title>{movie.title}</Card.Title>
+              <Card.Text>
+                <strong>Genres:</strong> {movie.genres.length > 0 ? movie.genres.join(', ') : 'Not available'}
+              </Card.Text>
+              <Card.Text>
+                <strong>Release Date:</strong> {movie.release_date || 'Not available'}
+              </Card.Text>
+              <Card.Text>
+                <strong>Rating:</strong> {movie.rating}/10
+              </Card.Text>
+              <Card.Text>
+                <strong>Language:</strong> {movie.original_language || 'Not available'}
+              </Card.Text>
+              <Button
+                variant={isInWatchlist ? "danger" : "primary"}
+                onClick={toggleWatchlist}
+                className="w-100 mb-2"
+              >
+                {isInWatchlist ? 'Remove from Watchlist' : 'Add to Watchlist'}
+              </Button>
+              <Button
+                variant={isFavorited ? "warning" : "secondary"}
+                onClick={toggleFavorites}
+                className="w-100"
+              >
+                {isFavorited ? 'Remove from Favorites' : 'Add to Favorites'}
+              </Button>
+            </Card.Body>
           </Card>
         </Col>
         <Col md={8}>
-          <h2>{movie.title}</h2>
-          <p><strong>Release Date:</strong> {movie.release_date}</p>
-          <p><strong>Rating:</strong> {movie.rating}</p>
-          <p>{movie.description}</p>
-          <Button variant={isInWatchlist ? "danger" : "primary"} onClick={toggleWatchlist}>
-            {isInWatchlist ? 'Remove from Watchlist' : 'Add to Watchlist'}
-          </Button>
-          <Button variant={isFavorited ? "warning" : "secondary"} className="ml-2" onClick={toggleFavorites}>
-            {isFavorited ? 'Remove from Favorites' : 'Add to Favorites'}
-          </Button>
+          <h2>Overview</h2>
+          <p>{movie.description || 'No description available.'}</p>
+          <h3>Cast</h3>
+          <ListGroup variant="flush">
+            {movie.actors.map((actor, index) => (
+              <ListGroup.Item key={index}>
+                <strong>{actor.name}</strong>
+              </ListGroup.Item>
+            ))}
+          </ListGroup>
         </Col>
       </Row>
 

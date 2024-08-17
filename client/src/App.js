@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link, useNavigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -8,15 +8,26 @@ import MovieDetails from './pages/MovieDetails';
 import { UserContext } from './UserContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
+import MyWatchlist from './pages/MyWatchlist';
+import MyFavorites from './pages/MyFavorites';
 
 function App() {
   const { user, setUser } = useContext(UserContext);
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('user');
     navigate('/home');
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?query=${searchQuery.trim()}`);
+      setSearchQuery('');
+    }
   };
 
   return (
@@ -29,13 +40,34 @@ function App() {
               <li className="nav-item">
                 <Link className="nav-link" to="/home">Home</Link>
               </li>
+              {user && (
+                <>
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/my-watchlist">My Watchlist</Link>
+                  </li>
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/my-favorites">My Favorites</Link>
+                  </li>
+                </>
+              )}
             </ul>
+            <form className="form-inline my-2 my-lg-0" onSubmit={handleSearchSubmit}>
+              <input
+                className="form-control mr-sm-2"
+                type="search"
+                placeholder="Search movies..."
+                aria-label="Search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <button className="btn btn-outline-success my-2 my-sm-0" type="submit">Search</button>
+            </form>
             {user ? (
-              <button className="btn btn-outline-danger" onClick={handleLogout}>Logout</button>
+              <button className="btn btn-outline-danger ml-2" onClick={handleLogout}>Logout</button>
             ) : (
               <>
-                <Link className="btn btn-outline-primary mr-2" to="/login">Login</Link>
-                <Link className="btn btn-outline-secondary" to="/register">Register</Link>
+                <Link className="btn btn-outline-primary ml-2" to="/login">Login</Link>
+                <Link className="btn btn-outline-secondary ml-2" to="/register">Register</Link>
               </>
             )}
           </div>
@@ -48,6 +80,8 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/search" element={<SearchResults />} />
           <Route path="/movies/:id" element={<MovieDetails />} />
+          <Route path="/my-watchlist" element={<MyWatchlist />} />
+          <Route path="/my-favorites" element={<MyFavorites />} />
         </Routes>
       </div>
       <footer className="bg-light text-center py-3">

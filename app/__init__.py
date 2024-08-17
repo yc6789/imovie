@@ -18,10 +18,13 @@ def create_app():
     # Configuration
     app.config.from_object('app.config.Config')
 
+    # Initialize caching
+    app.config['CACHE_TYPE'] = 'simple'  # You can use 'redis', 'memcached', etc., for production
+
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
-    login_manager.init_app(app)  # Initialize LoginManager with the Flask app
+    login_manager.init_app(app)
 
     # Set the session SQLAlchemy instance to the correct one
     app.config['SESSION_SQLALCHEMY'] = db
@@ -32,8 +35,8 @@ def create_app():
     # Enable CORS with credentials support
     CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
 
-    # Set the login view (the route where users will be redirected to log in)
-    login_manager.login_view = "main.loginresource"  # Update to the correct endpoint
+    # Set the login view
+    login_manager.login_view = "main.loginresource"
 
     # Import models only after initializing extensions
     from app import models

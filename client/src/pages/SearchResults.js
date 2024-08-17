@@ -1,26 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import axios from '../api';
+import { useLocation, Link } from 'react-router-dom';  // Added Link import
+import { fetchMoviesBySearchQuery } from '../api';
 import MovieCard from '../components/MovieCard';
 
-const SearchResults = ({ query }) => {
-    const [movies, setMovies] = useState([]);
+function useQuery() {
+  return new URLSearchParams(useLocation().search);
+}
 
-    useEffect(() => {
-        axios.get(`/movies/search?query=${query}`)
-            .then(response => setMovies(response.data))
-            .catch(error => console.error('Error fetching search results:', error));
-    }, [query]);
+const SearchResults = () => {
+  const query = useQuery().get('query');
+  const [movies, setMovies] = useState([]);
 
-    return (
-        <div className="container">
-            <h2 className="my-4">Search Results</h2>
-            <div className="row">
-                {movies.map(movie => (
-                    <MovieCard key={movie.id} movie={movie} />
-                ))}
+  useEffect(() => {
+    if (query) {
+      fetchMoviesBySearchQuery(query)
+        .then(response => setMovies(response.data))
+        .catch(error => console.error('Error fetching search results:', error));
+    }
+  }, [query]);
+
+  return (
+    <div className="container">
+      <h2 className="my-4">Search Results for "{query}"</h2>
+      <div className="row">
+        {movies.length > 0 ? (
+          movies.map(movie => (
+            <div className="col-md-3 mb-4" key={movie.id}>
+              <MovieCard movie={movie} />
             </div>
-        </div>
-    );
+          ))
+        ) : (
+          <div className="col-12 text-center">
+            <p>No results found for "{query}". Try searching with different keywords.</p>
+            <Link to="/home" className="btn btn-primary">Explore Trending Movies</Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default SearchResults;

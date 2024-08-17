@@ -2,10 +2,14 @@ from flask import Blueprint, request, jsonify, session, url_for
 from flask_restful import Api, Resource, fields, marshal_with
 from .models import db, Movie, Genre, Actor, User, Favorite, Rating, Watchlist
 from services.tmdb_services import TMDbService
+from flask_caching import Cache
 
 # Define a blueprint
 main = Blueprint('main', __name__)
 api = Api(main)
+
+# Initialize cache
+cache = Cache()
 
 # Define field mappings for marshalling
 user_fields = {
@@ -20,9 +24,15 @@ movie_fields = {
     'tmdb_id': fields.Integer,
     'title': fields.String,
     'description': fields.String,
-    'release_date': fields.String(attribute=lambda x: x.release_date.isoformat() if x and x.release_date else None),  # Additional check for None
+    'release_date': fields.String(attribute=lambda x: x['release_date'] if isinstance(x, dict) and 'release_date' in x else x.release_date.isoformat() if hasattr(x, 'release_date') and x.release_date else None),
     'rating': fields.Float,
     'poster_url': fields.String,
+    'original_language': fields.String,
+    'genres': fields.List(fields.String),
+    'actors': fields.List(fields.Nested({
+        'name': fields.String,
+        'character': fields.String
+    })),
     'links': fields.Raw
 }
 
@@ -177,6 +187,7 @@ class TrendingMoviesResource(Resource):
         else:
             return {'message': 'Failed to fetch trending movies!'}, 500
 
+
 class TrendingMoviesListResource(Resource):
     @marshal_with(movie_fields)
     def get(self):
@@ -186,6 +197,7 @@ class TrendingMoviesListResource(Resource):
         return trending_movies
 
 class MovieSearchResource(Resource):
+    @marshal_with(movie_fields)
     def get(self):
         query = request.args.get('query', '')
         if not query:
@@ -193,14 +205,15 @@ class MovieSearchResource(Resource):
         
         include_adult = request.args.get('include_adult', 'false').lower() == 'true'
         language = request.args.get('language', 'en-US')
-        page = int(request.get('page', 1))
-        primary_release_year = request.get('primary_release_year', None)
-        region = request.get('region', None)
-        year = request.get('year', None)
+        page = int(request.args.get('page', 1))
+        primary_release_year = request.args.get('primary_release_year', None)
+        region = request.args.get('region', None)
+        year = request.args.get('year', None)
 
         results = TMDbService.search_movies(query, include_adult, language, page, primary_release_year, region, year)
+        
         if results:
-            return results, 200, {'Cache-Control': 'public, max-age=3600'}
+            return results, 200
         else:
             return {'message': 'No results found'}, 404
 
@@ -238,7 +251,6 @@ class FavoriteResource(Resource):
 
         return {'message': 'Movie removed from favorites'}, 200
 
-
 class RatingResource(Resource):
     @marshal_with(rating_fields)
     def post(self):
@@ -265,7 +277,6 @@ class RatingResource(Resource):
         user_id = session.get('user_id')
         ratings = Rating.query.filter_by(user_id=user_id).all()
         return ratings
-
 
 class MovieReviewsResource(Resource):
     @marshal_with(rating_fields)
@@ -312,6 +323,32 @@ class WatchlistResource(Resource):
 
         return {'message': 'Movie removed from watchlist'}, 200
 
+class EnsureMovieResource(Resource):
+    @marshal_with(movie_fields)
+    def post(self):
+        data = request.get_json()
+        tmdb_id = data.get('tmdb_id')
+
+        if not tmdb_id:
+            return {'message': 'TMDb ID is required'}, 400  # Ensure the ID is provided
+
+        # Check if the movie already exists in the local database
+        movie = Movie.query.filter_by(tmdb_id=tmdb_id).first()
+
+        if not movie:
+            # Fetch and save the movie from TMDb if it doesn't exist
+            movie_data = TMDbService.fetch_and_save_movie(tmdb_id)
+            
+            if not movie_data:
+                return {'message': 'Failed to fetch movie from TMDb'}, 404
+
+            movie = Movie.query.filter_by(tmdb_id=tmdb_id).first()
+            if not movie:
+                return {'message': 'Failed to save movie to the database'}, 500
+
+        return movie, 201
+
+
 
 
 # Add resources to API
@@ -331,3 +368,4 @@ api.add_resource(RatingResource, '/users/ratings', endpoint='ratings')
 api.add_resource(WatchlistResource, '/users/watchlist', endpoint='watchlist')  # POST, GET for watchlist
 api.add_resource(WatchlistResource, '/users/watchlist/<int:movie_id>', endpoint='watchlist_delete')  # DELETE for a specific watchlist item
 api.add_resource(MovieReviewsResource, '/movies/<int:movie_id>/reviews', endpoint='movie_reviews')
+api.add_resource(EnsureMovieResource, '/movies/ensure')
