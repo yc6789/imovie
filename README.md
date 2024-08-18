@@ -14,6 +14,8 @@ This project aims to develop a comprehensive movie recommendation website that o
 - **Registration and Login**: Users can create accounts and log in securely.
 - **User Profiles**: Save favorite movies, ratings, and maintain a watchlist.
 
+## Next Steps
+
 ### Personalized Recommendations
 - **"Movies You Might Like" Section**: Receive personalized recommendations based on your viewing history, ratings, and preferences using collaborative or content-based filtering techniques.
 - **"Popular Movies" Section**: Explore currently trending or popular movies based on global user data.
